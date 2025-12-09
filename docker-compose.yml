@@ -80,8 +80,61 @@ services:
       - vantage-network
     restart: unless-stopped
 
+  # Vantage Worker - Consumes from Redpanda and writes to SQLite
+  worker:
+    build:
+      context: ./vantage-worker
+      dockerfile: Dockerfile
+    container_name: vantage-worker
+    environment:
+      WORKER_KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      WORKER_KAFKA_TOPIC: metrics-raw
+      WORKER_DATABASE_PATH: /app/data/metrics.db
+    volumes:
+      - metrics_data:/app/data
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - vantage-network
+    restart: unless-stopped
+
+  # Vantage API - Query service with WebSocket
+  api:
+    build:
+      context: ./vantage-api
+      dockerfile: Dockerfile
+    container_name: vantage-api
+    environment:
+      API_DATABASE_PATH: /app/data/metrics.db
+    ports:
+      - "8001:8001"
+    volumes:
+      - metrics_data:/app/data
+    depends_on:
+      - worker
+    networks:
+      - vantage-network
+    restart: unless-stopped
+
+  # Vantage Dashboard - React frontend
+  dashboard:
+    build:
+      context: ./vantage-dashboard
+      dockerfile: Dockerfile
+    container_name: vantage-dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - vantage-network
+    restart: unless-stopped
+
 volumes:
   redpanda_data:
+    driver: local
+  metrics_data:
     driver: local
 
 networks:
