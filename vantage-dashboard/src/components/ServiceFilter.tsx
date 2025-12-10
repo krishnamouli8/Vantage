@@ -6,24 +6,24 @@ interface Props {
 
 export function ServiceFilter({ selected, services, onChange }: Props) {
   return (
-    <div style={{ marginBottom: '1rem' }}>
-      <label htmlFor="service-select" style={{ marginRight: '0.5rem', fontWeight: 'bold' }}>
-        Service:
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      <label style={{ 
+        fontSize: '0.875rem', 
+        fontWeight: 500,
+        color: 'var(--color-text-secondary)',
+      }}>
+        Service
       </label>
       <select
-        id="service-select"
+        className="select"
         value={selected}
         onChange={(e) => onChange(e.target.value)}
-        style={{
-          padding: '0.5rem',
-          borderRadius: '4px',
-          border: '1px solid #ddd',
-          fontSize: '1rem'
-        }}
       >
         <option value="">All Services</option>
         {services.map(service => (
-          <option key={service} value={service}>{service}</option>
+          <option key={service} value={service}>
+            {service}
+          </option>
         ))}
       </select>
     </div>
