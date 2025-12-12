@@ -12,6 +12,7 @@ function App() {
   const [selectedService, setSelectedService] = useState('');
   const [timeRange, setTimeRange] = useState(3600);
   const [services, setServices] = useState<string[]>([]);
+  const [previousAggregated, setPreviousAggregated] = useState<any>(null);
   
   const { metrics, aggregated, loading } = useMetrics(selectedService || undefined, timeRange);
   const { connected } = useWebSocket();
@@ -19,6 +20,34 @@ function App() {
   useEffect(() => {
     api.getServices().then(setServices);
   }, []);
+  
+  // Store previous metrics for comparison
+  useEffect(() => {
+    if (aggregated && !loading) {
+      setPreviousAggregated(aggregated);
+    }
+  }, [timeRange]); // Only update when timeRange changes
+  
+  // Calculate percentage changes
+  const calculateChange = (current: number, previous: number): string => {
+    if (!previous || previous === 0) return '+0.0%';
+    const change = ((current - previous) / previous) * 100;
+    return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+  };
+  
+  const calculateTrend = (current: number, previous: number): 'up' | 'down' => {
+    return current >= previous ? 'up' : 'down';
+  };
+  
+  // Calculate success rate
+  const calculateSuccessRate = (): string => {
+    if (!aggregated || !aggregated.total_requests || aggregated.total_requests === 0) {
+      return '0.0%';
+    }
+    const successCount = aggregated.total_requests - (aggregated.error_count || 0);
+    const rate = (successCount / aggregated.total_requests) * 100;
+    return rate.toFixed(1) + '%';
+  };
 
   return (
     <div className="app-container">
@@ -184,30 +213,36 @@ function App() {
               <StatsCard 
                 title="Total Requests" 
                 value={aggregated?.total_requests || 0}
-                change="+12.5%"
-                trend="up"
+                change={previousAggregated ? calculateChange(aggregated?.total_requests || 0, previousAggregated.total_requests || 0) : undefined}
+                trend={previousAggregated ? calculateTrend(aggregated?.total_requests || 0, previousAggregated.total_requests || 0) : undefined}
                 icon="activity"
               />
               <StatsCard 
                 title="Avg Duration" 
                 value={`${(aggregated?.avg_duration || 0).toFixed(2)}ms`}
-                change="-8.2%"
-                trend="down"
+                change={previousAggregated ? calculateChange(aggregated?.avg_duration || 0, previousAggregated.avg_duration || 0) : undefined}
+                trend={previousAggregated ? calculateTrend(previousAggregated.avg_duration || 0, aggregated?.avg_duration || 0) : undefined}
                 icon="clock"
               />
               <StatsCard 
-                title="Error Rate" 
+                title="Error Count" 
                 value={aggregated?.error_count || 0}
                 subtitle="5xx errors"
-                change="+2.1%"
-                trend="up"
+                change={previousAggregated ? calculateChange(aggregated?.error_count || 0, previousAggregated.error_count || 0) : undefined}
+                trend={previousAggregated ? calculateTrend(previousAggregated.error_count || 0, aggregated?.error_count || 0) : undefined}
                 icon="alert"
               />
               <StatsCard 
                 title="Success Rate" 
-                value="98.2%"
-                change="+1.4%"
-                trend="up"
+                value={calculateSuccessRate()}
+                change={previousAggregated ? calculateChange(
+                  aggregated?.total_requests ? ((aggregated.total_requests - (aggregated.error_count || 0)) / aggregated.total_requests) * 100 : 0,
+                  previousAggregated.total_requests ? ((previousAggregated.total_requests - (previousAggregated.error_count || 0)) / previousAggregated.total_requests) * 100 : 0
+                ) : undefined}
+                trend={previousAggregated && aggregated?.total_requests && previousAggregated.total_requests ? calculateTrend(
+                  ((aggregated.total_requests - (aggregated.error_count || 0)) / aggregated.total_requests) * 100,
+                  ((previousAggregated.total_requests - (previousAggregated.error_count || 0)) / previousAggregated.total_requests) * 100
+                ) : undefined}
                 icon="check"
               />
             </div>

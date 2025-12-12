@@ -12,9 +12,12 @@ class Settings(BaseSettings):
     
     # Database settings
     database_path: str = "/app/data/metrics.db"
-    
-    # CORS
+    cors_enabled: bool = True
     cors_origins: list[str] = ["*"]
+    
+    # Authentication
+    api_key: str | None = None
+    auth_enabled: bool = False
     
     # Settings
     debug: bool = False

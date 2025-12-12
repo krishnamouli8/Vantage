@@ -6,11 +6,12 @@ Handles metric batch validation, rate limiting, and Kafka production.
 
 import logging
 import time
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status, Depends
 from fastapi.responses import JSONResponse
 from app.models import MetricBatch, IngestResponse
 from app.queue import get_producer
 from app.config import settings
+from app.auth import verify_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ _stats = {
 async def ingest_metrics(
     batch: MetricBatch,
     request: Request,
+    _: None = Depends(verify_api_key),  # Add authentication
 ) -> IngestResponse:
     """
     Ingest a batch of metrics.

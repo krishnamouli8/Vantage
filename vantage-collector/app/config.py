@@ -4,6 +4,7 @@ Configuration for the Vantage Collector service.
 Handles all service configuration with environment variable support.
 """
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -51,6 +52,10 @@ class Settings(BaseSettings):
     # CORS
     cors_enabled: bool = True
     cors_origins: list[str] = ["*"]
+    
+    # Authentication
+    api_key: str | None = None
+    auth_enabled: bool = False
     
     class Config:
         env_prefix = "VANTAGE_"

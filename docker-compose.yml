@@ -14,21 +14,21 @@ services:
       - --node-id
       - '0'
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:5050
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:19092
       - --advertise-kafka-addr
-      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:5050
+      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:19092
       - --pandaproxy-addr
-      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:8082
+      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:18084
       - --advertise-pandaproxy-addr
-      - PLAINTEXT://redpanda:28082,OUTSIDE://localhost:8082
+      - PLAINTEXT://redpanda:28082,OUTSIDE://localhost:18084
       - --rpc-addr
       - 0.0.0.0:33145
       - --advertise-rpc-addr
       - redpanda:33145
     ports:
-      - "5050:5050"     # Kafka API
-      - "8082:8082"     # Pandaproxy API
-      - "9644:9644"     # Admin API
+      - "19092:19092"     # Kafka API
+      - "18084:18084"     # Pandaproxy API
+      - "19645:9644"     # Admin API
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
@@ -47,7 +47,7 @@ services:
     environment:
       KAFKA_BROKERS: redpanda:29092
     ports:
-      - "8080:8080"
+      - "8083:8080"
     depends_on:
       redpanda:
         condition: service_healthy
@@ -61,10 +61,15 @@ services:
       dockerfile: Dockerfile
     container_name: vantage-collector
     environment:
-      VANTAGE_KAFKA_BOOTSTRAP_SERVERS: redpanda:29092  # Internal network uses 29092
-      VANTAGE_KAFKA_TOPIC: metrics-raw
-      VANTAGE_DEBUG: "false"
-      VANTAGE_ENVIRONMENT: development
+      # Kafka Configuration
+      - VANTAGE_KAFKA_BOOTSTRAP_SERVERS=${VANTAGE_KAFKA_BOOTSTRAP_SERVERS:-redpanda:29092}
+      - VANTAGE_KAFKA_TOPIC=${VANTAGE_KAFKA_TOPIC:-metrics-raw}
+      # Authentication (from .env)
+      - VANTAGE_API_KEY=${VANTAGE_API_KEY}
+      - VANTAGE_AUTH_ENABLED=${VANTAGE_AUTH_ENABLED:-false}
+      # Environment
+      - VANTAGE_DEBUG=${VANTAGE_DEBUG:-false}
+      - VANTAGE_ENVIRONMENT=${VANTAGE_ENVIRONMENT:-production}
     ports:
       - "8000:8000"
     depends_on:
@@ -82,35 +87,42 @@ services:
 
   # Vantage Worker - Consumes from Redpanda and writes to SQLite
   worker:
-    build:
-      context: ./vantage-worker
-      dockerfile: Dockerfile
+    build: ./vantage-worker
     container_name: vantage-worker
     environment:
-      WORKER_KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
-      WORKER_KAFKA_TOPIC: metrics-raw
-      WORKER_DATABASE_PATH: /app/data/metrics.db
+      # Kafka Configuration
+      - WORKER_KAFKA_BOOTSTRAP_SERVERS=${WORKER_KAFKA_BOOTSTRAP_SERVERS:-redpanda:29092}
+      - WORKER_KAFKA_TOPIC=${WORKER_KAFKA_TOPIC:-metrics-raw}
+      # Database Configuration
+      - WORKER_DATABASE_PATH=${WORKER_DATABASE_PATH:-/app/data/metrics.db}
+      - WORKER_BATCH_SIZE=${WORKER_BATCH_SIZE:-100}
     volumes:
-      - metrics_data:/app/data
+      - ./data:/app/data
     depends_on:
       redpanda:
         condition: service_healthy
+      collector:
+        condition: service_started
     networks:
       - vantage-network
     restart: unless-stopped
 
   # Vantage API - Query service with WebSocket
   api:
-    build:
-      context: ./vantage-api
-      dockerfile: Dockerfile
+    build: ./vantage-api
     container_name: vantage-api
-    environment:
-      API_DATABASE_PATH: /app/data/metrics.db
     ports:
       - "8001:8001"
+    environment:
+      # Database Configuration
+      - API_DATABASE_PATH=${API_DATABASE_PATH:-/app/data/metrics.db}
+      # Authentication (from .env)
+      - API_KEY=${API_KEY}
+      - API_AUTH_ENABLED=${API_AUTH_ENABLED:-false}
+      # Environment
+      - API_DEBUG=${API_DEBUG:-false}
     volumes:
-      - metrics_data:/app/data
+      - ./data:/app/data
     depends_on:
       - worker
     networks:
