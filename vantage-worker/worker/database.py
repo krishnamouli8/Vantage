@@ -15,6 +15,7 @@ def init_database():
     conn = sqlite3.connect(settings.database_path)
     cursor = conn.cursor()
     
+    # Metrics table with downsampling support
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,13 +29,104 @@ def init_database():
             status_code INTEGER,
             duration_ms REAL,
             tags TEXT,
+            trace_id TEXT,
+            span_id TEXT,
+            aggregated INTEGER DEFAULT 0,
+            resolution_minutes INTEGER DEFAULT 0,
+            min_value REAL,
+            max_value REAL,
+            p50 REAL,
+            p95 REAL,
+            p99 REAL,
+            sample_count INTEGER,
+            error_count INTEGER,
             created_at INTEGER DEFAULT (strftime('%s', 'now'))
         )
     """)
     
+    # Traces table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS traces (
+            trace_id TEXT PRIMARY KEY,
+            service_name TEXT NOT NULL,
+            start_time INTEGER NOT NULL,
+            end_time INTEGER,
+            duration_ms REAL,
+            status TEXT,
+            error INTEGER DEFAULT 0,
+            created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )
+    """)
+    
+    # Spans table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS spans (
+            span_id TEXT PRIMARY KEY,
+            trace_id TEXT NOT NULL,
+            parent_span_id TEXT,
+            service_name TEXT NOT NULL,
+            operation_name TEXT NOT NULL,
+            start_time INTEGER NOT NULL,
+            end_time INTEGER,
+            duration_ms REAL,
+            tags TEXT,
+            logs TEXT,
+            status TEXT,
+            error INTEGER DEFAULT 0,
+            FOREIGN KEY (trace_id) REFERENCES traces(trace_id)
+        )
+    """)
+    
+    # Alerts table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_id TEXT UNIQUE NOT NULL,
+            service_name TEXT NOT NULL,
+            metric_name TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            status TEXT NOT NULL,
+            message TEXT NOT NULL,
+            current_value REAL,
+            expected_min REAL,
+            expected_max REAL,
+            threshold_breach_count INTEGER DEFAULT 1,
+            first_triggered INTEGER NOT NULL,
+            last_triggered INTEGER NOT NULL,
+            resolved_at INTEGER,
+            created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )
+    """)
+    
+    # Query log for access frequency tracking
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS query_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_name TEXT,
+            metric_name TEXT,
+            timestamp INTEGER NOT NULL,
+            duration_ms REAL,
+            created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )
+    """)
+    
+    # Create indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON metrics(timestamp DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_service ON metrics(service_name, timestamp DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_metric ON metrics(metric_name, timestamp DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_id ON metrics(trace_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_aggregated ON metrics(aggregated, timestamp)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_service ON traces(service_name, start_time DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_time ON traces(start_time DESC)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_span_trace ON spans(trace_id, start_time)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_span_parent ON spans(parent_span_id)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_alert_service ON alerts(service_name, status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_alert_status ON alerts(status, last_triggered DESC)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_query_log ON query_log(service_name, metric_name, timestamp)")
     
     conn.commit()
     conn.close()

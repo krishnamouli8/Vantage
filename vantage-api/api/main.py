@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.query import router as query_router
+from api.traces import router as traces_router
+from api.alerts import router as alerts_router
 from api.websocket import websocket_endpoint
 
 logging.basicConfig(
@@ -29,6 +31,8 @@ app.add_middleware(
 
 # Routers
 app.include_router(query_router)
+app.include_router(traces_router)
+app.include_router(alerts_router)
 
 # WebSocket
 app.websocket("/ws/metrics")(websocket_endpoint)

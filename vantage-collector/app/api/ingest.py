@@ -12,6 +12,7 @@ from app.models import MetricBatch, IngestResponse
 from app.queue import get_producer
 from app.config import settings
 from app.auth import verify_api_key
+from app.trace_helper import extract_trace_context, add_trace_info_to_metric
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,17 @@ async def ingest_metrics(
                 detail="Message queue is unavailable"
             )
         
+        # Extract trace context from headers if present
+        trace_context = extract_trace_context(request)
+        
         # Convert metrics to dictionaries
         metric_dicts = [metric.model_dump() for metric in batch.metrics]
+        
+        # Add trace information if available
+        if trace_context:
+            metric_dicts = [
+                add_trace_info_to_metric(m, trace_context) for m in metric_dicts
+            ]
         
         # Send to Kafka
         successful, failed = await producer.send_batch(
