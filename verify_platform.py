@@ -13,13 +13,18 @@ import requests
 import sqlite3
 import json
 import time
+import os
 from pathlib import Path
 
 # Configuration
 COLLECTOR_URL = "http://localhost:8000"
 API_URL = "http://localhost:8001"
 DASHBOARD_URL = "http://localhost:3000"
-REDPANDA_CONSOLE_URL = "http://localhost:8080"
+REDPANDA_CONSOLE_URL = "http://localhost:8083"
+
+# API Key for authentication (read from environment or use default from .env)
+API_KEY = os.getenv('API_KEY', '1491588d317849081e81d71c82713643a6b669e5d693f398c89996745334d79f')
+VANTAGE_API_KEY = os.getenv('VANTAGE_API_KEY', '53bed2c668cb4df0f49c52ce1d6f9c1853a415a48d84b88bc4b89049857c41d5')
 
 # Database path (inside Docker volume, we'll check via API)
 # For local verification, you'd need to access the Docker volume
@@ -32,10 +37,10 @@ def print_section(title: str):
     print('=' * 70)
 
 
-def check_service(name: str, url: str, endpoint: str = "/") -> bool:
+def check_service(name: str, url: str, endpoint: str = "/", headers: dict = None) -> bool:
     """Check if a service is accessible."""
     try:
-        response = requests.get(f"{url}{endpoint}", timeout=5)
+        response = requests.get(f"{url}{endpoint}", timeout=5, headers=headers or {})
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -87,17 +92,21 @@ def main():
         print(f"   ❌ Error checking collector health: {e}")
         results["data_flow"]["collector_health"] = None
     
-    # 3. Check collector stats
+    # 3. Check collector stats  
     print_section("3. Checking Collector Stats")
     
     try:
-        response = requests.get(f"{COLLECTOR_URL}/v1/stats", timeout=5)
-        stats = response.json()
-        print(f"   Total metrics received: {stats.get('total_metrics', 0)}")
-        print(f"   Total batches received: {stats.get('total_batches', 0)}")
-        print(f"   Messages sent to Kafka: {stats.get('kafka_messages_sent', 0)}")
-        
-        results["data_flow"]["collector_stats"] = stats
+        response = requests.get(f"{COLLECTOR_URL}/metrics", timeout=5)
+        if response.status_code == 200:
+            stats = response.text
+            print(f"   Prometheus metrics endpoint accessible")
+            # Count lines to show it's returning data
+            metric_lines = [l for l in stats.split('\n') if l and not l.startswith('#')]
+            print(f"   Metrics exported: {len(metric_lines)} values")
+            results["data_flow"]["collector_stats"] = {"metric_count": len(metric_lines)}
+        else:
+            print(f"   ⚠️  Metrics endpoint returned: {response.status_code}")
+            results["data_flow"]["collector_stats"] = None
     except Exception as e:
         print(f"   ❌ Error checking collector stats: {e}")
         results["data_flow"]["collector_stats"] = None
@@ -106,40 +115,50 @@ def main():
     print_section("4. Querying API for Services")
     
     try:
-        response = requests.get(f"{API_URL}/v1/services", timeout=5)
-        services_list = response.json()
-        print(f"   Services found: {len(services_list)}")
-        for service in services_list:
-            print(f"     - {service}")
-        
-        results["api"]["services"] = services_list
+        headers = {"X-API-Key": API_KEY}
+        response = requests.get(f"{API_URL}/api/services", timeout=5, headers=headers)
+        if response.status_code == 200:
+            services_list = response.json()
+            print(f"   Services found: {len(services_list)}")
+            for service in services_list:
+                print(f"     - {service}")
+            results["api"]["services"] = services_list
+        else:
+            print(f"   ⚠️  API returned status {response.status_code}: {response.text[:100]}")
+            results["api"]["services"] = []
     except Exception as e:
         print(f"   ❌ Error querying services: {e}")
         results["api"]["services"] = []
     
     # 5. Query API for metrics
-    print_section("5. Querying API for Metrics")
+    print_section("5. Querying API for Metrics (Timeseries)")
     
     try:
         # Query recent metrics
+        headers = {"X-API-Key": API_KEY}
         response = requests.get(
-            f"{API_URL}/v1/metrics",
+            f"{API_URL}/api/metrics/timeseries",
             params={"limit": 10},
             timeout=5,
+            headers=headers
         )
-        metrics = response.json()
-        metric_count = len(metrics)
-        print(f"   Recent metrics returned: {metric_count}")
         
-        if metric_count > 0:
-            print(f"   Sample metric:")
-            sample = metrics[0]
-            print(f"     Service: {sample.get('service_name', 'N/A')}")
-            print(f"     Metric: {sample.get('metric_name', 'N/A')}")
-            print(f"     Endpoint: {sample.get('endpoint', 'N/A')}")
-            print(f"     Duration: {sample.get('duration_ms', 'N/A')}ms")
-        
-        results["api"]["metrics"] = metrics
+        if response.status_code == 200:
+            metrics = response.json()
+            metric_count = len(metrics) if isinstance(metrics, list) else 0
+            print(f"   Recent metrics returned: {metric_count}")
+            
+            if metric_count > 0:
+                print(f"   Sample metric:")
+                sample = metrics[0]
+                for key, value in sample.items():
+                    print(f"     {key}: {value}")
+            
+            results["api"]["metrics"] = metrics
+        else:
+            print(f"   ⚠️  API returned status {response.status_code}")
+            print(f"   Response: {response.text[:200]}")
+            results["api"]["metrics"] = []
     except Exception as e:
         print(f"   ❌ Error querying metrics: {e}")
         results["api"]["metrics"] = []
@@ -148,17 +167,25 @@ def main():
     print_section("6. Querying API for Aggregated Stats")
     
     try:
+        headers = {"X-API-Key": API_KEY}
         response = requests.get(
-            f"{API_URL}/v1/metrics/aggregated",
-            params={"time_range": 3600},  # Last hour
+            f"{API_URL}/api/metrics/aggregated",
+            params={"range": 3600},  # Last hour
             timeout=5,
+            headers=headers
         )
-        agg_stats = response.json()
-        print(f"   Total requests: {agg_stats.get('total_requests', 0)}")
-        print(f"   Average duration: {agg_stats.get('avg_duration', 0):.2f}ms")
-        print(f"   Error count: {agg_stats.get('error_count', 0)}")
         
-        results["api"]["aggregated"] = agg_stats
+        if response.status_code == 200:
+            agg_stats = response.json()
+            if isinstance(agg_stats, dict):
+                for key, value in agg_stats.items():
+                    print(f"   {key}: {value}")
+            else:
+                print(f"   Data points: {len(agg_stats) if isinstance(agg_stats, list) else 0}")
+            results["api"]["aggregated"] = agg_stats
+        else:
+            print(f"   ⚠️  API returned status {response.status_code}")
+            results["api"]["aggregated"] = None
     except Exception as e:
         print(f"   ❌ Error querying aggregated stats: {e}")
         results["api"]["aggregated"] = None
