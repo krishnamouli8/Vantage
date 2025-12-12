@@ -42,18 +42,14 @@ def test_distributed_tracing():
             "metrics": [
                 {
                     "timestamp": int(time.time() * 1000),
-                    "metric_name": "trace.span",
-                    "metric_type": "trace.span",
+                    "service_name": "api-gateway",
+                    "metric_name": "http.request.duration",
+                    "metric_type": "histogram",
                     "value": 150.5,
+                    "endpoint": "/api/users",
+                    "method": "GET",
+                    "status_code": 200,
                     "duration_ms": 150.5,
-                    "tags": {
-                        "trace_id": trace_id,
-                        "span_id": span_id,
-                        "parent_span_id": "root",
-                        "operation": "HTTP GET /api/users",
-                        "method": "GET",
-                        "endpoint": "/api/users",
-                    },
                 }
             ],
         },

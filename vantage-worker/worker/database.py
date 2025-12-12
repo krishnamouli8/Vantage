@@ -220,14 +220,16 @@ def insert_metrics_batch(metrics: List[Dict]) -> int:
                 metric.get("method"),
                 metric.get("status_code"),
                 metric.get("duration_ms"),
-                tags_json
+                tags_json,
+                metric.get("trace_id"),
+                metric.get("span_id"),
             ))
         
         cursor.executemany("""
             INSERT INTO metrics 
             (timestamp, service_name, metric_name, metric_type, value, 
-             endpoint, method, status_code, duration_ms, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             endpoint, method, status_code, duration_ms, tags, trace_id, span_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, data)
         
         conn.commit()
