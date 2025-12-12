@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Worker configuration."""
     
     # Kafka settings
-    kafka_bootstrap_servers: str = "localhost:5050"
+    kafka_bootstrap_servers: str = "redpanda:29092"  # Fixed default
     kafka_topic: str = "metrics-raw"
     kafka_group_id: str = "vantage-worker"
     
