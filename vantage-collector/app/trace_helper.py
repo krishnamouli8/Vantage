@@ -23,11 +23,13 @@ def extract_trace_context(request: Request) -> Optional[Dict[str, str]]:
         span_id = request.headers.get("X-Vantage-Span-Id")
 
         if trace_id and span_id:
+            logger.info(f"Extracted trace context: trace_id={trace_id[:20]}..., span_id={span_id[:20]}...")
             return {
                 "trace_id": trace_id,
                 "span_id": span_id,
             }
 
+        logger.debug("No trace headers found in request")
         return None
 
     except Exception as e:
@@ -60,6 +62,8 @@ def add_trace_info_to_metric(metric: Dict, trace_context: Optional[Dict]) -> Dic
         # Also set top-level fields for easier querying
         metric["trace_id"] = trace_context.get("trace_id")
         metric["span_id"] = trace_context.get("span_id")
+
+        logger.info(f"Added trace info to metric: {metric.get('metric_name')}, trace_id={trace_context.get('trace_id')[:20]}...")
 
         return metric
 
