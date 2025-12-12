@@ -15,34 +15,42 @@ def init_database():
     conn = sqlite3.connect(settings.database_path)
     cursor = conn.cursor()
     
-    # Metrics table with downsampling support
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS metrics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp INTEGER NOT NULL,
-            service_name TEXT NOT NULL,
-            metric_name TEXT NOT NULL,
-            metric_type TEXT NOT NULL,
-            value REAL NOT NULL,
-            endpoint TEXT,
-            method TEXT,
-            status_code INTEGER,
-            duration_ms REAL,
-            tags TEXT,
-            trace_id TEXT,
-            span_id TEXT,
-            aggregated INTEGER DEFAULT 0,
-            resolution_minutes INTEGER DEFAULT 0,
-            min_value REAL,
-            max_value REAL,
-            p50 REAL,
-            p95 REAL,
-            p99 REAL,
-            sample_count INTEGER,
-            error_count INTEGER,
-            created_at INTEGER DEFAULT (strftime('%s', 'now'))
-        )
-    """)
+    # Check if metrics table exists and get its columns
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='metrics'")
+    table_exists = cursor.fetchone() is not None
+    
+    if table_exists:
+        # Migrate existing table
+        _migrate_metrics_table(cursor)
+    else:
+        # Create new table with full schema
+        cursor.execute("""
+            CREATE TABLE metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                service_name TEXT NOT NULL,
+                metric_name TEXT NOT NULL,
+                metric_type TEXT NOT NULL,
+                value REAL NOT NULL,
+                endpoint TEXT,
+                method TEXT,
+                status_code INTEGER,
+                duration_ms REAL,
+                tags TEXT,
+                trace_id TEXT,
+                span_id TEXT,
+                aggregated INTEGER DEFAULT 0,
+                resolution_minutes INTEGER DEFAULT 0,
+                min_value REAL,
+                max_value REAL,
+                p50 REAL,
+                p95 REAL,
+                p99 REAL,
+                sample_count INTEGER,
+                error_count INTEGER,
+                created_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )
+        """)
     
     # Traces table
     cursor.execute("""
@@ -110,12 +118,16 @@ def init_database():
         )
     """)
     
-    # Create indexes
+    # Create indexes (safe for both new and migrated tables)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON metrics(timestamp DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_service ON metrics(service_name, timestamp DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_metric ON metrics(metric_name, timestamp DESC)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_id ON metrics(trace_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_aggregated ON metrics(aggregated, timestamp)")
+    
+    # Only create new indexes if columns exist
+    if _column_exists(cursor, 'metrics', 'trace_id'):
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_id ON metrics(trace_id)")
+    if _column_exists(cursor, 'metrics', 'aggregated'):
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_aggregated ON metrics(aggregated, timestamp)")
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_service ON traces(service_name, start_time DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_trace_time ON traces(start_time DESC)")
@@ -131,6 +143,50 @@ def init_database():
     conn.commit()
     conn.close()
     logger.info(f"Database initialized at {settings.database_path}")
+
+
+def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+    """Check if a column exists in a table"""
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+        return column_name in columns
+    except Exception:
+        return False
+
+
+def _migrate_metrics_table(cursor):
+    """Migrate existing metrics table to new schema"""
+    logger.info("Migrating metrics table to new schema...")
+    
+    # Get existing columns
+    cursor.execute("PRAGMA table_info(metrics)")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+    
+    # Add new columns if they don't exist
+    new_columns = {
+        'trace_id': 'TEXT',
+        'span_id': 'TEXT',
+        'aggregated': 'INTEGER DEFAULT 0',
+        'resolution_minutes': 'INTEGER DEFAULT 0',
+        'min_value': 'REAL',
+        'max_value': 'REAL',
+        'p50': 'REAL',
+        'p95': 'REAL',
+        'p99': 'REAL',
+        'sample_count': 'INTEGER',
+        'error_count': 'INTEGER',
+    }
+    
+    for column_name, column_type in new_columns.items():
+        if column_name not in existing_columns:
+            try:
+                cursor.execute(f"ALTER TABLE metrics ADD COLUMN {column_name} {column_type}")
+                logger.info(f"Added column: {column_name}")
+            except sqlite3.OperationalError as e:
+                logger.warning(f"Could not add column {column_name}: {e}")
+    
+    logger.info("Metrics table migration complete")
 
 
 @contextmanager
