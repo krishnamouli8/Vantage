@@ -56,8 +56,24 @@ yarn-error.log*
 # Docker
 *.env
 .env.local
+.env.example
 docker-compose.override.yml
 
 # ClickHouse data
 clickhouse_data/
 redpanda_data/
+
+# SQLite and data directories
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+metrics_data/
+
+# Lock files (optional - can be committed for reproducible builds)
+package-lock.json
+yarn.lock
+
+# Misc
+SELECT
