@@ -4,6 +4,7 @@ import json
 import logging
 import asyncio
 import time
+import sqlite3
 from typing import List, Dict
 from aiokafka import AIOKafkaConsumer
 from worker.config import settings
@@ -121,7 +122,12 @@ class MetricConsumer:
         try:
             async for message in self.consumer:
                 metric = message.value
-                self.batch.append(metric)
+                
+                # Store span data if present
+                if metric.get("metric_type") == "trace.span":
+                    self._store_span(metric)
+                else:
+                    self.batch.append(metric)
                 
                 if len(self.batch) >= settings.batch_size:
                     self._flush_batch()
@@ -132,4 +138,70 @@ class MetricConsumer:
                     
         except Exception as e:
             logger.error(f"Error consuming messages: {e}", exc_info=True)
+    
+    def _store_span(self, metric: Dict):
+        """Store span data in traces/spans tables"""
+        try:
+            conn = sqlite3.connect(settings.database_path)
+            cursor = conn.cursor()
+            
+            trace_id = metric.get("tags", {}).get("trace_id")
+            span_id = metric.get("tags", {}).get("span_id")
+            parent_span_id = metric.get("tags", {}).get("parent_span_id")
+            operation = metric.get("tags", {}).get("operation", "unknown")
+            
+            if not trace_id or not span_id:
+                logger.warning("Span missing trace_id or span_id, skipping")
+                return
+            
+            # Insert/update trace
+            cursor.execute(
+                """
+                INSERT INTO traces (trace_id, service_name, start_time, status)
+                VALUES (?, ?, ?, 'active')
+                ON CONFLICT(trace_id) DO UPDATE SET
+                    end_time = ?,
+                    duration_ms = ? - start_time
+                """,
+                (
+                    trace_id,
+                    metric.get("service_name"),
+                    metric.get("timestamp"),
+                    metric.get("timestamp"),
+                    metric.get("timestamp"),
+                ),
+            )
+            
+            # Insert span
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO spans (
+                    span_id, trace_id, parent_span_id, service_name,
+                    operation_name, start_time, end_time, duration_ms,
+                    tags, logs, status, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    span_id,
+                    trace_id,
+                    parent_span_id if parent_span_id != "root" else None,
+                    metric.get("service_name"),
+                    operation,
+                    metric.get("timestamp"),
+                    metric.get("timestamp"),
+                    metric.get("duration_ms"),
+                    json.dumps(metric.get("tags", {})),
+                    json.dumps([]),
+                    "ok",
+                    0,
+                ),
+            )
+            
+            conn.commit()
+            conn.close()
+            logger.debug(f"Stored span {span_id} for trace {trace_id}")
+            
+        except Exception as e:
+            logger.error(f"Error storing span: {e}")
+
 
