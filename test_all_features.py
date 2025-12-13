@@ -105,10 +105,10 @@ def test_alerts():
             print(f"    Firing: {summary.get('total_firing', 0)}, Resolved: {summary.get('total_resolved', 0)}")
             return True
         else:
-            print(f"  ⚠ Alerts API not on this branch")
+            print(f"  ✗ Alerts API returned status: {response.status_code}")
             return False
     except Exception as e:
-        print(f"  ⚠ Alerts not available (may be on different branch)")
+        print(f"  ✗ Alerts API error: {e}")
         return False
 
 
@@ -124,10 +124,10 @@ def test_tracing():
             print(f"  ✓ Tracing operational ({len(traces)} traces)")
             return True
         else:
-            print(f"  ⚠ Tracing API not on this branch")
+            print(f"  ✗ Tracing API returned status: {response.status_code}")
             return False
     except Exception as e:
-        print(f"  ⚠ Tracing not available (may be on different branch)")
+        print(f"  ✗ Tracing API error: {e}")
         return False
 
 
@@ -150,11 +150,9 @@ def test_downsampling():
             if count == 0:
                 print(f"    (Runs every 6 hours, check logs)")
             return True
-    except:
-        pass
-    
-    print("  ⚠ Downsampling not testable on this branch")
-    return False
+    except Exception as e:
+        print(f"  ✗ Could not verify downsampling: {e}")
+        return False
 
 
 def test_core_platform():
@@ -226,9 +224,8 @@ def main():
         'comparison': test_feature("Comparison", test_comparison),
     }
     
-    # Test Phase 1 features (may not be on current branch)
+    # Test Phase 1 features
     print_header("PHASE 1 FEATURES", 1)
-    print("(These may require 'additional-features-1' branch)")
     phase1_results = {
         'alerting': test_feature("Alerting", test_alerts),
         'tracing': test_feature("Tracing", test_tracing),
@@ -243,14 +240,14 @@ def main():
         icon = "✓" if status else "✗"
         print(f"  {icon} {name.title()}")
     
-    print("\n✓ Phase 2 Features (additional-features-2 branch):")
+    print("\n✓ Phase 2 Features:")
     for name, status in phase2_results.items():
         icon = "✓" if status else "✗"
         print(f"  {icon} {name.upper()}")
     
-    print("\n⚠ Phase 1 Features (additional-features-1 branch):")
+    print("\n✓ Phase 1 Features:")
     for name, status in phase1_results.items():
-        icon = "✓" if status else "⚠"
+        icon = "✓" if status else "✗"
         print(f"  {icon} {name.title()}")
     
     # Calculate totals
@@ -258,11 +255,15 @@ def main():
     working_features = sum(phase1_results.values()) + sum(phase2_results.values())
     
     print(f"\n📊 Features Working: {working_features}/{total_features}")
-    print(f"📦 Current Branch: additional-features-2")
-    print(f"\n💡 Tip: Checkout 'additional-features-1' to test Phase 1 features")
+    
+    if working_features == total_features:
+        print("\n✅ All features operational!")
+    else:
+        print(f"\n⚠️  {total_features - working_features} feature(s) not working")
+    
     print("=" * 70 + "\n")
     
-    return 0 if all(core_results.values()) else 1
+    return 0 if (all(core_results.values()) and working_features == total_features) else 1
 
 
 if __name__ == "__main__":

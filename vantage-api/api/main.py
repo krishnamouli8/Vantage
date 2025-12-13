@@ -8,6 +8,8 @@ from api.query import router as query_router
 from api.vql_router import router as vql_router
 from api.comparison_router import router as comparison_router
 from api.health_router import router as health_router
+from api.alerts import router as alerts_router
+from api.traces import router as traces_router
 from api.websocket import websocket_endpoint
 
 logging.basicConfig(
@@ -35,6 +37,8 @@ app.include_router(query_router)
 app.include_router(vql_router)
 app.include_router(comparison_router)
 app.include_router(health_router)
+app.include_router(alerts_router)
+app.include_router(traces_router)
 
 # WebSocket
 app.websocket("/ws/metrics")(websocket_endpoint)
