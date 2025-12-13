@@ -23,7 +23,10 @@ def extract_trace_context(request: Request) -> Optional[Dict[str, str]]:
         span_id = request.headers.get("X-Vantage-Span-Id")
 
         if trace_id and span_id:
-            logger.info(f"Extracted trace context: trace_id={trace_id[:20]}..., span_id={span_id[:20]}...")
+            # Safely truncate IDs for logging
+            trace_id_preview = trace_id[:20] if len(trace_id) > 20 else trace_id
+            span_id_preview = span_id[:20] if len(span_id) > 20 else span_id
+            logger.info(f"Extracted trace context: trace_id={trace_id_preview}..., span_id={span_id_preview}...")
             return {
                 "trace_id": trace_id,
                 "span_id": span_id,
@@ -63,7 +66,10 @@ def add_trace_info_to_metric(metric: Dict, trace_context: Optional[Dict]) -> Dic
         metric["trace_id"] = trace_context.get("trace_id")
         metric["span_id"] = trace_context.get("span_id")
 
-        logger.info(f"Added trace info to metric: {metric.get('metric_name')}, trace_id={trace_context.get('trace_id')[:20]}...")
+        # Safely log trace info
+        trace_id = trace_context.get("trace_id", "")
+        trace_id_preview = trace_id[:20] if trace_id and len(trace_id) > 20 else trace_id
+        logger.info(f"Added trace info to metric: {metric.get('metric_name')}, trace_id={trace_id_preview}...")
 
         return metric
 

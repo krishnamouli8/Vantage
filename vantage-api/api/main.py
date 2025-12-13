@@ -43,6 +43,44 @@ async def root():
     return {"service": "vantage-api", "version": "0.1.0"}
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    from datetime import datetime
+    from api.database import get_connection
+    
+    try:
+        # Test database connection
+        with get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        db_status = "healthy"
+        db_message = "Database connection successful"
+    except Exception as e:
+        db_status = "unhealthy"
+        db_message = f"Database connection failed: {str(e)}"
+    
+    return {
+        "status": "healthy" if db_status == "healthy" else "degraded",
+        "service": "vantage-api",
+        "version": "0.1.0",
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {
+            "database": {
+                "status": db_status,
+                "message": db_message
+            },
+            "api": {
+                "status": "healthy",
+                "message": "API is running"
+            }
+        }
+    }
+
+
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=settings.api_host, port=settings.api_port)
