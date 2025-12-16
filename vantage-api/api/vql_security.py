@@ -269,13 +269,23 @@ def validate_vql_query(query: str) -> None:
     if not re.search(r'\bSELECT\b', query, re.IGNORECASE):
         raise ValidationError("Query must contain SELECT clause")
     
-    # Prevent dangerous keywords
+    # Prevent dangerous keywords (expanded list)
     dangerous_keywords = [
         'DROP', 'DELETE', 'INSERT', 'UPDATE', 'TRUNCATE',
-        'ALTER', 'CREATE', 'REPLACE', 'EXEC', 'EXECUTE'
+        'ALTER', 'CREATE', 'REPLACE', 'EXEC', 'EXECUTE',
+        'PRAGMA', 'ATTACH', 'DETACH'  # SQLite specific dangerous commands
     ]
     for keyword in dangerous_keywords:
+        # Use word boundary to avoid false positives
         if re.search(rf'\b{keyword}\b', query, re.IGNORECASE):
             raise ValidationError(
                 f"Dangerous keyword not allowed: {keyword}"
+            )
+    
+    # Block access to system tables
+    system_tables = ['sqlite_master', 'sqlite_schema', 'sqlite_temp_master']
+    for table in system_tables:
+        if re.search(rf'\b{table}\b', query, re.IGNORECASE):
+            raise ValidationError(
+                f"Access to system table not allowed: {table}"
             )

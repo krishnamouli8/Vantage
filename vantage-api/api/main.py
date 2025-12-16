@@ -1,6 +1,3 @@
-"""Main FastAPI application."""
-
-import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
@@ -19,8 +16,27 @@ logging.basicConfig(
 
 app = FastAPI(
     title="Vantage Query API",
-    description="Query API for Vantage metrics with VQL, comparison, and health scores",
-    version="0.2.0"
+    description="Production-grade observability platform for metrics and traces",
+    version="0.3.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "metrics", "description": "Time-series metrics operations"},
+        {"name": "vql", "description": "VQL (Vantage Query Language) execution"},
+        {"name": "comparison", "description": "A/B testing and metric comparison"},
+        {"name": "health", "description": "Service health and monitoring"},
+        {"name": "alerts", "description": "Alert management"},
+        {"name": "traces", "description": "Distributed tracing"},
+        {"name": "websocket", "description": "Real-time metric streaming"}
+    ],
+    contact={
+        "name": "Vantage Platform",
+        "url": "https://github.com/krishnamouli8/Vantage"
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    }
 )
 
 # CORS

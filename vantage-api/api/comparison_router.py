@@ -1,9 +1,9 @@
 """
-Comparison API Router - Metric comparison for A/B testing
+Comparison API Router - Metric comparison for A/B testing with data validation
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from api.config import settings
 from api.comparison import MetricComparison, ComparisonResult
@@ -32,9 +32,11 @@ class TimeComparisonRequest(BaseModel):
 
 
 @router.post("/services")
-async def compare_services(request: ServiceComparisonRequest) -> ComparisonResult:
+async def compare_services(request: ServiceComparisonRequest):
     """
-    Compare a metric between two services (e.g., canary vs production)
+    Compare a metric between two services (e.g., canary vs production).
+    
+    Returns HTTP 400 if insufficient data for statistical comparison.
     
     Example:
     - baseline_service: "api-v1"
@@ -43,6 +45,8 @@ async def compare_services(request: ServiceComparisonRequest) -> ComparisonResul
     """
     try:
         engine = MetricComparison(settings.database_path)
+        
+        # Attempt comparison
         result = engine.compare_services(
             request.baseline_service,
             request.candidate_service,
@@ -50,18 +54,48 @@ async def compare_services(request: ServiceComparisonRequest) -> ComparisonResul
             request.time_start,
             request.time_end
         )
+        
+        # Check if we have enough data
+        if hasattr(result, 'baseline_count') and hasattr(result, 'candidate_count'):
+            min_samples = 10
+            if result.baseline_count < min_samples or result.candidate_count < min_samples:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Insufficient data",
+                        "message": f"Need at least {min_samples} samples per service for statistical comparison",
+                        "baseline_samples": result.baseline_count,
+                        "candidate_samples": result.candidate_count,
+                        "required_samples": min_samples,
+                        "suggestion": "Send more metrics or expand the time range"
+                    }
+                )
+        
         return result
+        
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Likely insufficient data error from comparison engine
+        error_msg = str(e)
+        if "insufficient" in error_msg.lower() or "not enough" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Insufficient data",
+                    "message": error_msg,
+                    "suggestion": "Send more metrics or expand the time range"
+                }
+            )
+        raise HTTPException(status_code=400, detail=error_msg)
+        
     except Exception as e:
         logger.error(f"Error comparing services: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/time-periods")
-async def compare_time_periods(request: TimeComparisonRequest) -> ComparisonResult:
+async def compare_time_periods(request: TimeComparisonRequest):
     """
-    Compare a metric across two time periods (e.g., before/after deployment)
+    Compare a metric across two time periods (e.g., before/after deployment).
     
     Example:
     - service_name: "api-gateway"
@@ -79,9 +113,38 @@ async def compare_time_periods(request: TimeComparisonRequest) -> ComparisonResu
             request.candidate_start,
             request.candidate_end
         )
+        
+        # Check data sufficiency
+        if hasattr(result, 'baseline_count') and hasattr(result, 'candidate_count'):
+            min_samples = 10
+            if result.baseline_count < min_samples or result.candidate_count < min_samples:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Insufficient data",
+                        "message": f"Need at least {min_samples} samples per period for statistical comparison",
+                        "baseline_samples": result.baseline_count,
+                        "candidate_samples": result.candidate_count,
+                        "required_samples": min_samples,
+                        "suggestion": "Send more metrics or expand the time ranges"
+                    }
+                )
+        
         return result
+        
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = str(e)
+        if "insufficient" in error_msg.lower() or "not enough" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Insufficient data",
+                    "message": error_msg,
+                    "suggestion": "Send more metrics or expand the time ranges"
+                }
+            )
+        raise HTTPException(status_code=400, detail=error_msg)
+        
     except Exception as e:
         logger.error(f"Error comparing time periods: {e}")
         raise HTTPException(status_code=500, detail=str(e))
