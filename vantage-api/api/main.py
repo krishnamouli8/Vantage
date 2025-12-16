@@ -40,6 +40,10 @@ app.include_router(health_router)
 app.include_router(alerts_router)
 app.include_router(traces_router)
 
+# Add Prometheus metrics router
+from api import metrics_router
+app.include_router(metrics_router.router)
+
 # WebSocket
 app.websocket("/ws/metrics")(websocket_endpoint)
 

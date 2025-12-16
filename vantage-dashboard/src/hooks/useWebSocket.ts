@@ -6,7 +6,7 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8001/ws/metrics');
+    const ws = new WebSocket('ws://localhost:5000/ws/metrics');
 
     ws.onopen = () => {
       console.log('WebSocket connected');

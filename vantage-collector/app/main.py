@@ -86,9 +86,22 @@ if settings.cors_enabled:
 # Add GZip compression middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# Add rate limiting middleware
+from app.middleware import RateLimitMiddleware
+app.add_middleware(
+    RateLimitMiddleware,
+    enabled=settings.rate_limit_enabled,
+    max_requests=settings.rate_limit_requests,
+    window_seconds=settings.rate_limit_window,
+)
+
 # Include routers
 app.include_router(ingest_router)
 app.include_router(health_router)
+
+# Add metrics router
+from app.api import metrics as metrics_module
+app.include_router(metrics_module.router)
 
 
 @app.get("/", tags=["root"])

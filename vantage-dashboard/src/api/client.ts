@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:5000';
 
 export const api = {
   async getTimeseries(service?: string, range: number = 3600) {

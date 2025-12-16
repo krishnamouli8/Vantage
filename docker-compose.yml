@@ -1,4 +1,26 @@
 services:
+  # ClickHouse - Production-grade time-series database
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.12
+    container_name: vantage-clickhouse
+    environment:
+      - CLICKHOUSE_DB=vantage
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+    ports:
+      - "8123:8123" # HTTP interface
+      - "9000:9000" # Native protocol
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: [ "CMD", "clickhouse-client", "--query", "SELECT 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - vantage-network
+
   # Redpanda - Kafka-compatible message queue
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.3.3
@@ -7,32 +29,32 @@ services:
       - redpanda
       - start
       - --smp
-      - '1'
+      - "1"
       - --reserve-memory
       - 0M
       - --overprovisioned
       - --node-id
-      - '0'
+      - "0"
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:19092
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9095
       - --advertise-kafka-addr
-      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:19092
+      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9095
       - --pandaproxy-addr
-      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:18084
+      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:8082
       - --advertise-pandaproxy-addr
-      - PLAINTEXT://redpanda:28082,OUTSIDE://localhost:18084
+      - PLAINTEXT://redpanda:28082,OUTSIDE://localhost:8082
       - --rpc-addr
       - 0.0.0.0:33145
       - --advertise-rpc-addr
       - redpanda:33145
     ports:
-      - "19092:19092"     # Kafka API
-      - "18084:18084"     # Pandaproxy API
-      - "19645:9644"     # Admin API
+      - "9095:9095" # Kafka API
+      - "8082:8082" # Pandaproxy API
+      - "9644:9644" # Admin API
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 15s
       timeout: 3s
       retries: 5
@@ -47,7 +69,7 @@ services:
     environment:
       KAFKA_BROKERS: redpanda:29092
     ports:
-      - "8083:8080"
+      - "8080:8080"
     depends_on:
       redpanda:
         condition: service_healthy
@@ -76,7 +98,7 @@ services:
       redpanda:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -85,7 +107,7 @@ services:
       - vantage-network
     restart: unless-stopped
 
-  # Vantage Worker - Consumes from Redpanda and writes to SQLite
+  # Vantage Worker - Consumes from Redpanda and writes to ClickHouse
   worker:
     build: ./vantage-worker
     container_name: vantage-worker
@@ -94,11 +116,23 @@ services:
       - WORKER_KAFKA_BOOTSTRAP_SERVERS=${WORKER_KAFKA_BOOTSTRAP_SERVERS:-redpanda:29092}
       - WORKER_KAFKA_TOPIC=${WORKER_KAFKA_TOPIC:-metrics-raw}
       # Database Configuration
+      - WORKER_DATABASE_TYPE=${WORKER_DATABASE_TYPE:-clickhouse}
+      # ClickHouse settings
+      - WORKER_CLICKHOUSE_HOST=${WORKER_CLICKHOUSE_HOST:-clickhouse}
+      - WORKER_CLICKHOUSE_PORT=${WORKER_CLICKHOUSE_PORT:-9000}
+      - WORKER_CLICKHOUSE_DATABASE=${WORKER_CLICKHOUSE_DATABASE:-vantage}
+      - WORKER_CLICKHOUSE_USER=${WORKER_CLICKHOUSE_USER:-default}
+      - WORKER_CLICKHOUSE_PASSWORD=${WORKER_CLICKHOUSE_PASSWORD:-}
+      # SQLite fallback
       - WORKER_DATABASE_PATH=${WORKER_DATABASE_PATH:-/app/data/metrics.db}
       - WORKER_BATCH_SIZE=${WORKER_BATCH_SIZE:-100}
     volumes:
       - ./data:/app/data
+    ports:
+      - "9090:9090" # Prometheus metrics (changed from 9090 to avoid conflict)
     depends_on:
+      clickhouse:
+        condition: service_healthy
       redpanda:
         condition: service_healthy
       collector:
@@ -112,9 +146,18 @@ services:
     build: ./vantage-api
     container_name: vantage-api
     ports:
-      - "8001:8001"
+      - "5000:5000"
+      - "9091:9091" # Prometheus metrics
     environment:
       # Database Configuration
+      - API_DATABASE_TYPE=${API_DATABASE_TYPE:-clickhouse}
+      # ClickHouse settings
+      - API_CLICKHOUSE_HOST=${API_CLICKHOUSE_HOST:-clickhouse}
+      - API_CLICKHOUSE_PORT=${API_CLICKHOUSE_PORT:-9000}
+      - API_CLICKHOUSE_DATABASE=${API_CLICKHOUSE_DATABASE:-vantage}
+      - API_CLICKHOUSE_USER=${API_CLICKHOUSE_USER:-default}
+      - API_CLICKHOUSE_PASSWORD=${API_CLICKHOUSE_PASSWORD:-}
+      # SQLite fallback
       - API_DATABASE_PATH=${API_DATABASE_PATH:-/app/data/metrics.db}
       # Authentication (from .env)
       - API_KEY=${API_KEY}
@@ -124,7 +167,10 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - worker
+      clickhouse:
+        condition: service_healthy
+      worker:
+        condition: service_started
     networks:
       - vantage-network
     restart: unless-stopped
@@ -144,6 +190,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  clickhouse_data:
+    driver: local
   redpanda_data:
     driver: local
   metrics_data:

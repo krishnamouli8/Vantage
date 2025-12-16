@@ -39,7 +39,7 @@ class TestEndToEndPipeline:
         
         # Step 3: Verify metric appears in query API
         query_response = requests.get(
-            "http://localhost:8001/api/metrics/timeseries",
+            "http://localhost:5000/api/metrics/timeseries",
             params={"service": "integration-test", "range": 300}
         )
         
@@ -65,7 +65,7 @@ class TestEndToEndPipeline:
         
         # Get aggregated metrics
         response = requests.get(
-            "http://localhost:8001/api/metrics/aggregated",
+            "http://localhost:5000/api/metrics/aggregated",
             params={"service": "integration-test"}
         )
         
@@ -82,7 +82,7 @@ class TestEndToEndPipeline:
         requests.get("http://httpbin.org/get")
         time.sleep(2)
         
-        response = requests.get("http://localhost:8001/api/services")
+        response = requests.get("http://localhost:5000/api/services")
         assert response.status_code == 200
         
         services = response.json()

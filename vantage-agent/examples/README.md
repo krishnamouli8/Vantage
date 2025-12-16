@@ -26,9 +26,9 @@ python demo_flask.py
 
 Then visit:
 
-- http://localhost:5000/
-- http://localhost:5000/api/users
-- http://localhost:5000/api/slow
+- http://localhost:5001/
+- http://localhost:5001/api/users
+- http://localhost:5001/api/slow
 
 ### 3. FastAPI Application (`demo_fastapi.py`)
 

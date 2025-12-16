@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     
     # API settings
     api_host: str = "0.0.0.0"
-    api_port: int = 8001
+    api_port: int = 5000
     
     # Database settings
     database_path: str = "/app/data/metrics.db"

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vantage-common"
+version = "0.1.0"
+description = "Shared utilities for Vantage Observability Platform"
+authors = [{name = "Vantage Team"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "structlog>=23.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]

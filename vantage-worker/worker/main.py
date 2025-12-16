@@ -7,6 +7,7 @@ from worker.config import settings
 from worker.database import init_database
 from worker.consumer import MetricConsumer
 from worker.periodic_tasks import PeriodicTasks
+from worker.metrics import start_metrics_server
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -22,6 +23,10 @@ async def main():
     
     # Initialize database
     init_database()
+    
+    # Start Prometheus metrics server
+    await start_metrics_server(port=9090)
+    logger.info("Metrics server started on port 9090")
     
     # Create consumer and periodic tasks
     consumer = MetricConsumer()

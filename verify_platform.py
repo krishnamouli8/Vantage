@@ -18,9 +18,9 @@ from pathlib import Path
 
 # Configuration
 COLLECTOR_URL = "http://localhost:8000"
-API_URL = "http://localhost:8001"
+API_URL = "http://localhost:5000"
 DASHBOARD_URL = "http://localhost:3000"
-REDPANDA_CONSOLE_URL = "http://localhost:8083"
+REDPANDA_CONSOLE_URL = "http://localhost:8080"
 
 # API Key for authentication (read from environment or use default from .env)
 API_KEY = os.getenv('API_KEY', '1491588d317849081e81d71c82713643a6b669e5d693f398c89996745334d79f')
