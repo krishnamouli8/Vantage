@@ -129,7 +129,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "9090:9090" # Prometheus metrics (changed from 9090 to avoid conflict)
+      - "9091:9091" # Prometheus metrics (changed from 9090 to avoid conflict)
     depends_on:
       clickhouse:
         condition: service_healthy

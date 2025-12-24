@@ -22,5 +22,20 @@ export const api = {
   async getServices() {
     const response = await fetch(`${API_BASE}/api/services`);
     return response.json();
+  },
+
+  async getAlerts(limit: number = 100) {
+    const response = await fetch(`${API_BASE}/alerts/?limit=${limit}`);
+    return response.json();
+  },
+
+  async getActiveAlerts() {
+    const response = await fetch(`${API_BASE}/alerts/active`);
+    return response.json();
+  },
+
+  async getHealthScores() {
+    const response = await fetch(`${API_BASE}/health/scores`);
+    return response.json();
   }
 };
